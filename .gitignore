@@ -1,0 +1,7 @@
+.venv
+.idea
+__pycache__
+.vscode
+**/slideshow_config.json
+**/config.json
+font
