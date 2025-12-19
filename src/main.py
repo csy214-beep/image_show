@@ -13,21 +13,31 @@ from typing import List, Optional
 from datetime import datetime
 
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QLabel, QWidget,
-    QVBoxLayout, QMessageBox
+    QApplication,
+    QMainWindow,
+    QLabel,
+    QWidget,
+    QVBoxLayout,
+    QMessageBox,
 )
-from PySide6.QtCore import (
-    Qt, QTimer, Signal, QThread, QSize, QPoint
-)
+from PySide6.QtCore import Qt, QTimer, Signal, QThread, QSize, QPoint
 from PySide6.QtGui import (
-    QPixmap, QImage, QKeyEvent, QPainter,
-    QFont, QColor, QCursor, QPalette, QFontDatabase
+    QPixmap,
+    QImage,
+    QKeyEvent,
+    QPainter,
+    QFont,
+    QColor,
+    QCursor,
+    QPalette,
+    QFontDatabase,
 )
 from PIL import Image
 
 
 class Config:
     """配置管理类"""
+
     DEFAULT_CONFIG = {
         "image_folder": "",
         "recursive": True,
@@ -38,10 +48,11 @@ class Config:
         "extensions": [".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff", ".webp"],
         "rescan_interval": 300,
         "show_info": True,
+        "show_clock": True,
         "font_path": None,
         "font_size": 20,
         "info_color": "#FFFFFF",
-        "background_color": "#000000"
+        "background_color": "#000000",
     }
 
     def __init__(self, config_file: str = "slideshow_config.json"):
@@ -77,6 +88,7 @@ class Config:
 
 class ImageScanner(QThread):
     """图片扫描线程"""
+
     scan_complete = Signal(list)
 
     def __init__(self, folder: str, extensions: List[str], recursive: bool):
@@ -115,6 +127,8 @@ class ImageViewer(QLabel):
         self.scale_mode = "fit"
         self.info_text = ""
         self.show_info_flag = True
+        self.show_clock_flag = True
+        self.clock_text = ""
         self.info_font = QFont("Arial", 20)
         self.info_color = QColor("#FFFFFF")
 
@@ -132,12 +146,14 @@ class ImageViewer(QLabel):
             # 转换为 QImage
             if pil_image.mode == 'RGBA':
                 data = pil_image.tobytes("raw", "RGBA")
-                qimage = QImage(data, pil_image.width, pil_image.height,
-                                QImage.Format_RGBA8888)
+                qimage = QImage(
+                    data, pil_image.width, pil_image.height, QImage.Format_RGBA8888
+                )
             else:
                 data = pil_image.tobytes("raw", "RGB")
-                qimage = QImage(data, pil_image.width, pil_image.height,
-                                QImage.Format_RGB888)
+                qimage = QImage(
+                    data, pil_image.width, pil_image.height, QImage.Format_RGB888
+                )
 
             self.current_pixmap = QPixmap.fromImage(qimage)
             self.update_display()
@@ -177,19 +193,18 @@ class ImageViewer(QLabel):
         self.update_display()
 
     def paintEvent(self, event):
-        """绘制事件 - 添加信息显示"""
+        """绘制事件 - 添加信息显示和时钟"""
         super().paintEvent(event)
 
-        if self.show_info_flag and self.info_text:
-            painter = QPainter(self)
-            painter.setFont(self.info_font)
-            painter.setPen(self.info_color)
+        painter = QPainter(self)
+        painter.setFont(self.info_font)
+        painter.setPen(self.info_color)
 
+        # 绘制左下角信息
+        if self.show_info_flag and self.info_text:
             # 计算文字大小
             text_rect = painter.boundingRect(
-                0, 0, self.width(), self.height(),
-                0,  # 对齐方式，这里先不设置
-                self.info_text
+                0, 0, self.width(), self.height(), 0, self.info_text
             )
 
             # 设置背景矩形的内边距
@@ -202,18 +217,55 @@ class ImageViewer(QLabel):
             text_rect.moveBottomLeft(bg_rect.bottomLeft() + QPoint(padding, -padding))
 
             # 绘制半透明背景
-            painter.setBrush(QColor(0, 0, 0, 120))  # 黑色，透明度120 (0-255)
-            painter.setPen(Qt.NoPen)  # 无边框
-            painter.drawRoundedRect(bg_rect, 4, 4)  # 圆角矩形，半径4px
+            painter.setBrush(QColor(0, 0, 0, 120))
+            painter.setPen(Qt.NoPen)
+            painter.drawRoundedRect(bg_rect, 4, 4)
 
             # 恢复文字颜色和绘制文字
             painter.setPen(self.info_color)
             painter.drawText(text_rect, 0, self.info_text)
-            painter.end()
+
+        # 绘制右上角时钟
+        if self.show_clock_flag and self.clock_text:
+            # 根据窗口大小动态调整时钟字体
+            clock_font = QFont(self.info_font)
+            clock_size = max(24, int(self.width() * 0.025))
+            clock_font.setPointSize(clock_size)
+            painter.setFont(clock_font)
+
+            # 计算时钟文字大小
+            clock_rect = painter.boundingRect(
+                0, 0, self.width(), self.height(), 0, self.clock_text
+            )
+
+            # 设置背景矩形的内边距
+            padding = 8
+            bg_rect = clock_rect.adjusted(-padding, -padding, padding, padding)
+
+            # 将背景矩形定位到右上角
+            margin = 20
+            bg_rect.moveTopRight(self.rect().topRight() + QPoint(-margin, margin))
+            clock_rect.moveTopRight(bg_rect.topRight() + QPoint(-padding, padding))
+
+            # 绘制半透明背景
+            painter.setBrush(QColor(0, 0, 0, 120))
+            painter.setPen(Qt.NoPen)
+            painter.drawRoundedRect(bg_rect, 4, 4)
+
+            # 恢复文字颜色和绘制时钟
+            painter.setPen(self.info_color)
+            painter.drawText(clock_rect, 0, self.clock_text)
+
+        painter.end()
 
     def set_info(self, text: str):
         """设置信息文本"""
         self.info_text = text
+        self.update()
+
+    def set_clock(self, text: str):
+        """设置时钟文本"""
+        self.clock_text = text
         self.update()
 
 
@@ -252,17 +304,17 @@ class SlideshowWindow(QMainWindow):
         # 创建图片显示组件
         self.image_viewer = ImageViewer()
         self.image_viewer.show_info_flag = self.config.get("show_info", True)
+        self.image_viewer.show_clock_flag = self.config.get("show_clock", True)
 
         # 设置字体
         font_path = self.config.get("font_path")
         font_size: int = self.config.get("font_size", 20)
         font_family = loadFont(font_path)
+        font_family.setBold(True)
         font_family.setPointSize(font_size)
         self.image_viewer.info_font = font_family
 
-        self.image_viewer.info_color = QColor(
-            self.config.get("info_color", "#FFFFFF")
-        )
+        self.image_viewer.info_color = QColor(self.config.get("info_color", "#FFFFFF"))
 
         layout.addWidget(self.image_viewer)
 
@@ -289,6 +341,18 @@ class SlideshowWindow(QMainWindow):
         rescan_interval = self.config.get("rescan_interval", 30) * 1000
         self.scan_timer.setInterval(rescan_interval)
         self.scan_timer.start()
+
+        # 时钟更新定时器
+        self.clock_timer = QTimer()
+        self.clock_timer.timeout.connect(self.update_clock)
+        self.clock_timer.setInterval(200)  # 每0.2秒更新
+        self.clock_timer.start()
+
+    def update_clock(self):
+        """更新时钟显示"""
+        now = datetime.now()
+        clock_text = now.strftime("%H:%M")  # %H:%M:%S
+        self.image_viewer.set_clock(clock_text)
 
     def start_scan(self):
         """开始扫描图片"""
@@ -390,6 +454,12 @@ class SlideshowWindow(QMainWindow):
         self.config.set("show_info", self.image_viewer.show_info_flag)
         self.image_viewer.update()
 
+    def toggle_clock(self):
+        """切换时钟显示"""
+        self.image_viewer.show_clock_flag = not self.image_viewer.show_clock_flag
+        self.config.set("show_clock", self.image_viewer.show_clock_flag)
+        self.image_viewer.update()
+
     def toggle_mouse(self):
         """切换鼠标可见性"""
         if self.cursor().shape() == Qt.BlankCursor:
@@ -431,6 +501,9 @@ class SlideshowWindow(QMainWindow):
         elif key == Qt.Key_I:
             # 切换信息显示
             self.toggle_info()
+        elif key == Qt.Key_C:
+            # 切换时钟显示
+            self.toggle_clock()
         elif key == Qt.Key_M:
             # 切换鼠标
             self.toggle_mouse()
@@ -451,6 +524,7 @@ class SlideshowWindow(QMainWindow):
         """关闭事件"""
         self.play_timer.stop()
         self.scan_timer.stop()
+        self.clock_timer.stop()
         if hasattr(self, 'scanner'):
             self.scanner.quit()
             self.scanner.wait()
@@ -465,7 +539,7 @@ def loadFont(path: str | None) -> QFont:
     font_id = QFontDatabase.addApplicationFont(font_path)
 
     if font_id < 0:
-        print(f"错误：无法加载字体文件 {font_path}")
+        print(f"错误:无法加载字体文件 {font_path}")
         # 可以在这里设置一个备用字体
         font_family = "Arial"
     else:
